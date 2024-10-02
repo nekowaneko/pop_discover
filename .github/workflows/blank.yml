@@ -56,6 +56,7 @@ jobs:
       run: |
         git config --local user.email "ccheng686@yahoo.com.tw"
         git config --local user.name "nekowaneko"
+        git add executed-discover.ipynb
         git add web_info.db
         git commit -m "Update web_info.db with new data"
         git push origin main
