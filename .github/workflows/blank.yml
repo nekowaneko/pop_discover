@@ -44,13 +44,12 @@ jobs:
       run: |
         jupyter nbconvert --to notebook --execute discover.ipynb --output executed-discover.ipynb
 
-    - name: Check for changes in web_info.db
+    - name: Check for changes
+      id: check_changes
       run: |
-        git diff --quiet web_info.db || echo "changes=true" >> $GITHUB_ENV
-
-    - name: Output the result
-      run: |
-        echo "Changes detected: ${{ env.changes }}"
+        if [[ -n $(git status --porcelain) ]]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"; 
+        fi
 
     - name: Commit and push if DB changed
       if: steps.check_changes.outputs.changes == 'true'
@@ -59,4 +58,4 @@ jobs:
         git config --local user.name "nekowaneko"
         git add web_info.db
         git commit -m "Update web_info.db with new data"
-        git push
+        git push origin main
