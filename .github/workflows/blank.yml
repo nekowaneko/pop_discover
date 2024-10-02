@@ -1,0 +1,51 @@
+# This is a basic workflow to help you get started with Actions
+
+name: discover
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  schedule:
+    - cron: '0 */6 * * *'  # 每6小時運行一次
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+  
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  execute-notebook:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10' # 指定你需要的Python版本
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests tqdm
+
+    - name: Execute Jupyter Notebook
+      run: |
+        pip install nbconvert
+        jupyter nbconvert --to notebook --execute discover.ipynb --output executed-discover.ipynb
+
+    - name: Check for changes in DB
+      id: check_changes
+      run: |
+        git diff --quiet web_info.db || echo "::set-output name=changes::true"
+
+    - name: Commit and push if DB changed
+      if: steps.check_changes.outputs.changes == 'true'
+      run: |
+        git config --local user.email "ccheng686@yahoo.com.tw"
+        git config --local user.name "nekowaneko"
+        git add web_info.db
+        git commit -m "Update web_info.db with new data"
+        git push
