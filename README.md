@@ -24,7 +24,7 @@
 
 7. 以gradio進行圖形介面  (待)
 
-8. 以git action達到自動化更新  (待)
+8. 以git action達到自動化更新  (O)
 
 ## 擴展與優化
 1. 輸入自己tag、like、view、bookmark數後，給予你在同tags族群中的排名。
