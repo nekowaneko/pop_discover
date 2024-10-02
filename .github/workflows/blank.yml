@@ -44,10 +44,13 @@ jobs:
       run: |
         jupyter nbconvert --to notebook --execute discover.ipynb --output executed-discover.ipynb
 
-    - name: Check for changes in DB
-      id: check_changes
+    - name: Check for changes in web_info.db
       run: |
-        git diff --quiet web_info.db || echo "::set-output name=changes::true"
+        git diff --quiet web_info.db || echo "changes=true" >> $GITHUB_ENV
+
+    - name: Output the result
+      run: |
+        echo "Changes detected: ${{ env.changes }}"
 
     - name: Commit and push if DB changed
       if: steps.check_changes.outputs.changes == 'true'
