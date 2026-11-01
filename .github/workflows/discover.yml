@@ -5,8 +5,6 @@ on:
   schedule:
     - cron: '0 */6 * * *'  #每 6 小時執行一次（UTC）
   workflow_dispatch:  #可以在 Actions 頁面手動執行
-  push:
-    branches: [fix-crawler-pages]  #暫時：測試用，合併前移除
 
 permissions:
   contents: write  #推送 data 分支

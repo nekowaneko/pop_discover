@@ -44,7 +44,7 @@
 - 資料庫改存在 `data` 分支（`web_info.db.gz`，只保留最新一版），不再每次 commit 進 main。main 裡的 `web_info.db` 是 2024 年的舊資料快照。
 - `build_index.py` 把資料庫轉成分片 JSON，網頁在瀏覽器端計算，不需要伺服器。
 - 排程：`.github/workflows/discover.yml`，每 6 小時執行一次。
-- 選用：在 repo Secrets 設定 `PIXIV_PHPSESSID`，才抓得到 R-18 作品。
+- 選用：在 repo Secrets 設定 `PIXIV_PHPSESSID`（實測未登入也抓得到 R-18 的數據，通常不需要）。
 - 舊版 `discover.ipynb`、`google2.py`（Gradio）保留作為紀錄，已不再使用。
 
 ### 本機預覽
