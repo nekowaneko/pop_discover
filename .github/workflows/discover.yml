@@ -5,6 +5,8 @@ on:
   schedule:
     - cron: '0 */6 * * *'  #每 6 小時執行一次（UTC）
   workflow_dispatch:  #可以在 Actions 頁面手動執行
+  push:
+    branches: [fix-crawler-pages]  #暫時：測試用，合併前移除
 
 permissions:
   contents: write  #推送 data 分支
@@ -44,18 +46,25 @@ jobs:
 
       - name: 爬取新作品
         id: crawl
-        run: python crawl.py
+        run: |
+          set -o pipefail
+          python crawl.py 2>&1 | tee crawl.log
         env:
+          PYTHONUNBUFFERED: '1'
           PIXIV_PHPSESSID: ${{ secrets.PIXIV_PHPSESSID }}  #選用，沒設定就只抓得到全年齡作品
+          SAVE_TARGET: ${{ github.ref == 'refs/heads/main' && '200' || '50' }}  #分支測試只存 50 筆
 
-      - name: 資料庫存到 data 分支
-        if: steps.crawl.outcome == 'success'
+      #爬蟲中途失敗時，已存進去的資料仍然有效，所以照樣保存；同時附上執行紀錄方便查問題
+      - name: 資料庫與執行紀錄存到 data 分支
+        if: ${{ !cancelled() }}
         run: |
           mkdir -p /tmp/data
           gzip -9 -c web_info.db > /tmp/data/web_info.db.gz
+          cp crawl.log /tmp/data/crawl.log 2>/dev/null || echo "沒有執行紀錄" > /tmp/data/crawl.log
+          echo "執行結果：${{ steps.crawl.outcome }}（${{ github.ref_name }} ${{ github.sha }}）" >> /tmp/data/crawl.log
           cd /tmp/data
           git init -q -b data
-          git add web_info.db.gz
+          git add web_info.db.gz crawl.log
           git -c user.name="nekowaneko" -c user.email="ccheng686@yahoo.com.tw" commit -q -m "資料庫更新 $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
 
@@ -74,7 +83,7 @@ jobs:
 
   deploy:
     needs: crawl
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}  #只有 main 才部署網站
     runs-on: ubuntu-latest
     environment:
       name: github-pages
