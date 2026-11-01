@@ -1,0 +1,5 @@
+#建置產物（由 Actions 產生，不進版控）
+site/data/
+site/design/
+__pycache__/
+*.mhtml

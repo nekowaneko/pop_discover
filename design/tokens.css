@@ -1,0 +1,90 @@
+/* 暖石板琥珀 — 設計 token，請勿手動修改 */
+
+:root, [data-theme="light"] {
+  --surface-page: #F4F1EC;
+  --surface-card: #FFFFFF;
+  --surface-slate: #3A4250;
+  --ink: #2B313C;
+  --ink-muted: #636B78;
+  --on-slate: #E8E2D6;
+  --amber: #E9A23B;
+  --on-amber: #3A2A0C;
+  --amber-text: #8A5A12;
+  --amber-soft: #F7E6C4;
+  --amber-on-slate: #F2B544;
+  --progress-fill: #B07014;
+  --progress-track: #ECE7DE;
+  --line: #E2DCD1;
+  --success: #2A7050;
+  --success-soft: #DCEFE4;
+  --danger: #B23B2E;
+  --danger-soft: #F8DEDA;
+  --focus: #B07014;
+}
+
+[data-theme="dark"] {
+  --surface-page: #1E2229;
+  --surface-card: #272C35;
+  --surface-slate: #4A5363;
+  --ink: #EEEAE3;
+  --ink-muted: #A3ABB8;
+  --on-slate: #E8E2D6;
+  --amber: #F2B544;
+  --on-amber: #3A2A0C;
+  --amber-text: #F2B544;
+  --amber-soft: #4A3A1E;
+  --amber-on-slate: #F2B544;
+  --progress-fill: #F2B544;
+  --progress-track: #343A45;
+  --line: #3A404B;
+  --success: #6CC59A;
+  --success-soft: #1F3A2D;
+  --danger: #F08A7E;
+  --danger-soft: #45231F;
+  --focus: #F2B544;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --surface-page: #1E2229;
+    --surface-card: #272C35;
+    --surface-slate: #4A5363;
+    --ink: #EEEAE3;
+    --ink-muted: #A3ABB8;
+    --on-slate: #E8E2D6;
+    --amber: #F2B544;
+    --on-amber: #3A2A0C;
+    --amber-text: #F2B544;
+    --amber-soft: #4A3A1E;
+    --amber-on-slate: #F2B544;
+    --progress-fill: #F2B544;
+    --progress-track: #343A45;
+    --line: #3A404B;
+    --success: #6CC59A;
+    --success-soft: #1F3A2D;
+    --danger: #F08A7E;
+    --danger-soft: #45231F;
+    --focus: #F2B544;
+  }
+}
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-bar: 2px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --font-sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+}
+
+.sl-text-display { font-family: var(--font-sans); font-size: 28px; line-height: 36px; font-weight: 500; }
+.sl-text-title { font-family: var(--font-sans); font-size: 20px; line-height: 28px; font-weight: 500; }
+.sl-text-stat { font-family: var(--font-sans); font-size: 24px; line-height: 30px; font-weight: 500; }
+.sl-text-body { font-family: var(--font-sans); font-size: 15px; line-height: 24px; font-weight: 400; }
+.sl-text-label { font-family: var(--font-sans); font-size: 13px; line-height: 20px; font-weight: 500; }
+.sl-text-caption { font-family: var(--font-sans); font-size: 12px; line-height: 18px; font-weight: 400; }

@@ -1,0 +1,28 @@
+body { margin: 0; font-family: var(--font-sans); background: var(--surface-page); color: var(--ink); font-size: 15px; line-height: 24px; }
+.sl-row { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; padding: var(--space-4); }
+.sl-btn { font: inherit; font-size: 13px; font-weight: 500; height: 36px; padding: 0 var(--space-4); border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--surface-card); color: var(--ink); cursor: pointer; }
+.sl-btn:hover { border-color: var(--ink-muted); }
+.sl-btn-primary { background: var(--amber); border-color: var(--amber); color: var(--on-amber); }
+.sl-btn-primary:hover { border-color: var(--on-amber); }
+.sl-btn-slate { background: var(--surface-slate); border-color: var(--surface-slate); color: var(--on-slate); }
+.sl-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sl-badge { display: inline-block; font-size: 12px; line-height: 20px; padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--line); color: var(--ink); }
+.sl-badge-amber { background: var(--amber-soft); color: var(--amber-text); }
+.sl-badge-success { background: var(--success-soft); color: var(--success); }
+.sl-badge-danger { background: var(--danger-soft); color: var(--danger); }
+.sl-bento { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.sl-card { background: var(--surface-card); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); }
+.sl-card-label { font-size: 12px; line-height: 18px; color: var(--ink-muted); }
+.sl-card-value { font-size: 24px; line-height: 30px; font-weight: 500; color: var(--ink); }
+.sl-card-slate { background: var(--surface-slate); }
+.sl-card-slate .sl-card-label { color: var(--on-slate); }
+.sl-card-slate .sl-card-value { color: var(--amber-on-slate); }
+.sl-progress-head { display: flex; justify-content: space-between; font-size: 12px; line-height: 18px; color: var(--ink-muted); margin-bottom: 6px; }
+.sl-progress-num { color: var(--ink); font-weight: 500; }
+.sl-progress-track { height: 4px; border-radius: var(--radius-bar); background: var(--progress-track); overflow: hidden; }
+.sl-progress-fill { height: 100%; border-radius: var(--radius-bar); background: var(--progress-fill); }
+/* 新增元件：輸入框（2026-11 pop_discover 提議，沿用卡片底色、細線外框、按鈕圓角） */
+.sl-input { font: inherit; font-size: 15px; height: 40px; width: 100%; box-sizing: border-box; padding: 0 var(--space-3); border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--surface-card); color: var(--ink); }
+.sl-input::placeholder { color: var(--ink-muted); }
+.sl-input:hover { border-color: var(--ink-muted); }
+.sl-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

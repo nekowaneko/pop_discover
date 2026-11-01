@@ -1,0 +1,85 @@
+#每 6 小時：爬新作品 → 資料庫存到 data 分支 → 建索引 → 部署 GitHub Pages
+name: discover
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  #每 6 小時執行一次（UTC）
+  workflow_dispatch:  #可以在 Actions 頁面手動執行
+
+permissions:
+  contents: write  #推送 data 分支
+  pages: write  #部署 GitHub Pages
+  id-token: write
+
+concurrency:
+  group: discover  #同時只跑一個，避免兩次執行搶著寫資料庫
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安裝套件
+        run: pip install requests
+
+      #資料庫不再每次 commit 進 main（會讓 repo 越來越肥），改存在只保留最新一版的 data 分支
+      #data 分支還不存在時（第一次執行），沿用 main 裡的 web_info.db
+      - name: 取得最新資料庫
+        run: |
+          if git fetch --depth=1 origin data 2>/dev/null; then
+            git show origin/data:web_info.db.gz | gunzip > web_info.db
+            echo "已從 data 分支取得資料庫"
+          else
+            echo "data 分支不存在，使用 main 的 web_info.db"
+          fi
+
+      - name: 爬取新作品
+        id: crawl
+        run: python crawl.py
+        env:
+          PIXIV_PHPSESSID: ${{ secrets.PIXIV_PHPSESSID }}  #選用，沒設定就只抓得到全年齡作品
+
+      - name: 資料庫存到 data 分支
+        if: steps.crawl.outcome == 'success'
+        run: |
+          mkdir -p /tmp/data
+          gzip -9 -c web_info.db > /tmp/data/web_info.db.gz
+          cd /tmp/data
+          git init -q -b data
+          git add web_info.db.gz
+          git -c user.name="nekowaneko" -c user.email="ccheng686@yahoo.com.tw" commit -q -m "資料庫更新 $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
+
+      #爬蟲失敗時仍用既有資料重建網站，網站不會因此壞掉；這次執行仍會標成失敗，方便發現問題
+      - name: 建立網站資料索引
+        if: ${{ !cancelled() }}
+        run: |
+          python build_index.py
+          cp -r design site/design
+
+      - name: 上傳網站
+        if: ${{ !cancelled() }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: crawl
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: 部署到 GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

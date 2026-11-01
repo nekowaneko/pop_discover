@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixiv 人氣探索工具</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="design/tokens.css">
+<link rel="stylesheet" href="design/components.css">
+<style>
+  .page { max-width: 880px; margin: 0 auto; padding: var(--space-6) var(--space-4) var(--space-8); box-sizing: border-box; }
+  .section { margin-top: var(--space-6); }
+  .muted { color: var(--ink-muted); }
+  .stack { display: flex; flex-direction: column; gap: var(--space-3); }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .search-row { display: flex; gap: var(--space-2); }
+  .search-row .sl-btn { flex: none; height: 40px; }
+  .suggest { display: flex; flex-wrap: wrap; gap: var(--space-2); min-height: 0; }
+  .bento-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .bento-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .card-sub { font-size: 12px; line-height: 18px; color: var(--ink-muted); margin-top: var(--space-1); }
+  .sl-card-slate .card-sub { color: var(--on-slate); }
+  .dist { display: flex; flex-direction: column; gap: var(--space-3); }
+  .overview-list { display: flex; flex-direction: column; gap: var(--space-2); }
+  .overview-item { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+  .chip-btn { height: 32px; padding: 0 var(--space-3); display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; }
+  .chip-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip-btn i { font-size: 16px; }
+  @media (max-width: 640px) {
+    .bento-3, .bento-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bento-3 > .sl-card-slate { grid-column: span 2; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="sl-text-display">Pixiv 人氣探索</div>
+  <div class="sl-text-body muted">輸入 hashtag，看同標籤作品發布後的觀看、愛心、收藏數，預估你的作品大概會落在哪裡。</div>
+
+  <section class="section stack" aria-label="查詢">
+    <div class="search-row">
+      <input id="tagInput" class="sl-input" type="text" placeholder="輸入標籤，例如 オリジナル" autocomplete="off" aria-label="輸入標籤" disabled>
+      <button id="addBtn" class="sl-btn sl-btn-primary" type="button" disabled>加入標籤</button>
+    </div>
+    <div id="suggest" class="suggest" aria-live="polite"></div>
+    <div id="selected" class="chips" aria-label="已選標籤"></div>
+  </section>
+
+  <section id="status" class="section" aria-live="polite"></section>
+  <section id="result" class="section"></section>
+  <section id="overview" class="section"></section>
+
+  <div class="section sl-text-caption muted" id="footer"></div>
+</main>
+
+<script>
+// 常數定義
+const DATA_DIR = 'data'
+const SUGGEST_LIMIT = 8  //自動完成最多顯示幾個
+const COTAG_LIMIT = 10  //常一起出現的標籤顯示幾個
+const SMALL_SAMPLE = 30  //低於這個筆數就提醒樣本少
+const VIEW_BINS = [  //觀看數分布的區間
+  { label: '未滿 100', max: 100 },
+  { label: '100～300', max: 300 },
+  { label: '300～1,000', max: 1000 },
+  { label: '1,000～3,000', max: 3000 },
+  { label: '3,000～10,000', max: 10000 },
+  { label: '10,000～30,000', max: 30000 },
+  { label: '30,000 以上', max: Infinity }
+]
+
+// 狀態
+const state = { meta: null, stats: null, tags: [], tagIndex: new Map(), selected: [], postCache: new Map(), rowCache: new Map(), queryId: 0 }
+
+// 小工具
+const $ = (id) => document.getElementById(id)
+const fmt = (n) => Math.round(n).toLocaleString('zh-TW')
+const escapeHtml = (text) => text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const fetchJson = async (path) => {
+  const response = await fetch(`${DATA_DIR}/${path}`)
+  if (!response.ok) throw new Error(`${path} 讀取失敗（HTTP ${response.status}）`)
+  return response.json()
+}
+
+// 統計函數
+const quantile = (sorted, q) => {
+  if (sorted.length === 0) return 0
+  const pos = (sorted.length - 1) * q
+  const low = Math.floor(pos)
+  const high = Math.ceil(pos)
+  return sorted[low] + (sorted[high] - sorted[low]) * (pos - low)
+}
+const summarize = (values) => {
+  const n = values.length
+  const mean = values.reduce((a, b) => a + b, 0) / n
+  const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / n)  //母體標準差，與原本 numpy 的 std 相同
+  const sorted = Float64Array.from(values).sort()
+  return { mean, std, median: quantile(sorted, 0.5), p25: quantile(sorted, 0.25), p75: quantile(sorted, 0.75) }
+}
+
+// 資料讀取：標籤 → 作品列號
+const getPostings = async (tagId) => {
+  const shard = tagId % state.meta.post_shards
+  if (!state.postCache.has(shard)) state.postCache.set(shard, fetchJson(`post/${shard}.json`))
+  const shardData = await state.postCache.get(shard)
+  const deltas = shardData[tagId] || []
+  const rows = new Array(deltas.length)
+  let current = 0
+  deltas.forEach((d, i) => { current += d; rows[i] = current })  //還原差分編碼
+  return rows
+}
+
+// 多個標籤取交集（每個標籤都要有）
+const intersect = (lists) => {
+  const sortedLists = [...lists].sort((a, b) => a.length - b.length)
+  let result = sortedLists[0]
+  for (const list of sortedLists.slice(1)) {
+    const set = new Set(list)
+    result = result.filter((row) => set.has(row))
+  }
+  return result
+}
+
+// 資料讀取：作品列號 → 標籤編號（算常一起出現的標籤）
+const getRowTags = async (rowIndexes) => {
+  const chunkSize = state.meta.row_chunk
+  const needed = [...new Set(rowIndexes.map((r) => Math.floor(r / chunkSize)))]
+  await Promise.all(needed.map((c) => {
+    if (!state.rowCache.has(c)) state.rowCache.set(c, fetchJson(`rows/${c}.json`))
+    return state.rowCache.get(c)
+  }))
+  const chunks = new Map()
+  for (const c of needed) chunks.set(c, await state.rowCache.get(c))
+  return rowIndexes.map((r) => chunks.get(Math.floor(r / chunkSize))[r % chunkSize])
+}
+
+const findCoTags = async (rowIndexes, excludeIds) => {
+  const rowTags = await getRowTags(rowIndexes)
+  const counts = new Map()
+  for (const tags of rowTags) for (const t of tags) if (!excludeIds.has(t)) counts.set(t, (counts.get(t) || 0) + 1)
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, COTAG_LIMIT)
+}
+
+// 畫面：自動完成
+const renderSuggest = () => {
+  const keyword = $('tagInput').value.trim().toLowerCase()
+  const box = $('suggest')
+  if (!keyword) { box.innerHTML = ''; return }
+  const prefix = []
+  const contains = []
+  for (let i = 0; i < state.tags.length && prefix.length < SUGGEST_LIMIT; i++) {  //標籤已依次數排序
+    const name = state.tags[i][0].toLowerCase()
+    if (state.selected.includes(i)) continue
+    if (name.startsWith(keyword)) prefix.push(i)
+    else if (contains.length < SUGGEST_LIMIT && name.includes(keyword)) contains.push(i)
+  }
+  const picks = [...prefix, ...contains].slice(0, SUGGEST_LIMIT)
+  box.innerHTML = picks.length === 0
+    ? `<span class="sl-text-caption muted">資料裡沒有符合「${escapeHtml(keyword)}」的標籤</span>`
+    : picks.map((i) => `<button type="button" class="sl-btn chip-btn" data-add="${i}"><i class="ti ti-plus" aria-hidden="true"></i><span>${escapeHtml(state.tags[i][0])}</span><span class="muted">${fmt(state.tags[i][1])}</span></button>`).join('')
+}
+
+// 畫面：已選標籤
+const renderSelected = () => {
+  $('selected').innerHTML = state.selected.map((i) =>
+    `<button type="button" class="sl-btn chip-btn" data-remove="${i}" aria-label="移除 ${escapeHtml(state.tags[i][0])}"><span>${escapeHtml(state.tags[i][0])}</span><i class="ti ti-x" aria-hidden="true"></i></button>`
+  ).join('')
+}
+
+const metricCard = (label, s, slate) => `
+  <div class="sl-card${slate ? ' sl-card-slate' : ''}">
+    <div class="sl-card-label">${label}（中位數）</div>
+    <div class="sl-card-value">${fmt(s.median)}</div>
+    <div class="card-sub">平均 ${fmt(s.mean)} ± ${fmt(s.std)}</div>
+    <div class="card-sub">中間一半：${fmt(s.p25)}～${fmt(s.p75)}</div>
+  </div>`
+
+const distribution = (views) => {
+  const counts = VIEW_BINS.map(() => 0)
+  for (const v of views) counts[VIEW_BINS.findIndex((b) => v < b.max)]++
+  return VIEW_BINS.map((bin, i) => {
+    const pct = views.length ? Math.round(counts[i] / views.length * 100) : 0
+    return `<div class="sl-progress">
+      <div class="sl-progress-head"><span>${bin.label}</span><span class="sl-progress-num">${pct}%（${fmt(counts[i])} 件）</span></div>
+      <div class="sl-progress-track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="觀看數 ${bin.label} 的比例"><div class="sl-progress-fill" style="width: ${pct}%;"></div></div>
+    </div>`
+  }).join('')
+}
+
+// 畫面：查詢結果
+const renderResult = async () => {
+  const queryId = ++state.queryId  //快速連點時，只顯示最後一次查詢
+  const result = $('result')
+  const status = $('status')
+  if (state.selected.length === 0) { result.innerHTML = ''; status.innerHTML = ''; $('overview').hidden = false; return }
+  $('overview').hidden = true
+  status.innerHTML = `<div class="sl-progress"><div class="sl-progress-head"><span>查詢中</span><span class="sl-progress-num">讀取標籤索引</span></div><div class="sl-progress-track" role="progressbar" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100" aria-label="查詢進度"><div class="sl-progress-fill" style="width: 50%;"></div></div></div>`
+  try {
+    const lists = await Promise.all(state.selected.map(getPostings))
+    const rows = intersect(lists)
+    if (queryId !== state.queryId) return
+    const names = state.selected.map((i) => `「${escapeHtml(state.tags[i][0])}」`).join(' + ')
+    if (rows.length === 0) {
+      status.innerHTML = ''
+      result.innerHTML = `<div class="sl-card"><div class="sl-text-title">沒有同時符合 ${names} 的作品</div><div class="sl-text-body muted">試著移除一個標籤，或換成比較常見的寫法。</div></div>`
+      return
+    }
+    const pick = (arr) => rows.map((r) => arr[r])
+    const views = pick(state.stats.view)
+    const view = summarize(views)
+    const like = summarize(pick(state.stats.like))
+    const bookmark = summarize(pick(state.stats.bookmark))
+    const sampleBadge = rows.length < SMALL_SAMPLE
+      ? `<span class="sl-badge sl-badge-danger">樣本少，僅供參考</span>`
+      : `<span class="sl-badge sl-badge-success">樣本充足</span>`
+    result.innerHTML = `
+      <div class="stack">
+        <div><div class="sl-text-title">${names}</div><div class="sl-text-caption muted">共 ${fmt(rows.length)} 件作品 ${sampleBadge}</div></div>
+        <div class="sl-bento bento-3">${metricCard('觀看數', view, true)}${metricCard('愛心數', like)}${metricCard('收藏數', bookmark)}</div>
+        <div class="sl-card stack"><div class="sl-text-label">觀看數分布</div><div class="dist">${distribution(views)}</div></div>
+        <div class="sl-card stack"><div class="sl-text-label">常一起出現的標籤</div><div id="cotags" class="chips"><span class="sl-text-caption muted">計算中</span></div></div>
+      </div>`
+    status.innerHTML = ''
+    const coTags = await findCoTags(rows, new Set(state.selected))
+    if (queryId !== state.queryId) return
+    $('cotags').innerHTML = coTags.length === 0
+      ? `<span class="sl-text-caption muted">這些作品沒有其他標籤</span>`
+      : coTags.map(([t, c]) => `<button type="button" class="sl-btn chip-btn" data-add="${t}"><i class="ti ti-plus" aria-hidden="true"></i><span>${escapeHtml(state.tags[t][0])}</span><span class="muted">${fmt(c)}</span></button>`).join('')
+  } catch (error) {
+    if (queryId !== state.queryId) return
+    status.innerHTML = `<div class="sl-card"><span class="sl-badge sl-badge-danger">讀取失敗</span> <span class="sl-text-body">${escapeHtml(error.message)}，請重新整理頁面再試一次。</span></div>`
+  }
+}
+
+// 畫面：整體概況
+const renderOverview = () => {
+  const m = state.meta
+  $('overview').innerHTML = `
+    <div class="stack">
+      <div class="sl-text-title">整體概況</div>
+      <div class="sl-bento bento-4">
+        <div class="sl-card sl-card-slate"><div class="sl-card-label">作品數</div><div class="sl-card-value">${fmt(m.count)}</div></div>
+        <div class="sl-card"><div class="sl-card-label">標籤數</div><div class="sl-card-value">${fmt(m.tag_count)}</div></div>
+        <div class="sl-card"><div class="sl-card-label">觀看數中位數</div><div class="sl-card-value">${fmt(m.median_view)}</div></div>
+        <div class="sl-card"><div class="sl-card-label">最新作品發布</div><div class="sl-card-value">${m.newest_create_date ? m.newest_create_date.slice(5, 10).replace('-', '/') : '—'}</div></div>
+      </div>
+      <div class="sl-card stack">
+        <div class="sl-text-label">最常見的標籤（點一下直接查詢）</div>
+        <div class="overview-list">${m.overview.map((o) => `
+          <div class="overview-item">
+            <button type="button" class="sl-btn chip-btn" data-add="${state.tagIndex.get(o.tag)}"><span>${escapeHtml(o.tag)}</span></button>
+            <span class="sl-text-caption muted">${fmt(o.count)} 件・觀看中位數 ${fmt(o.median_view)}</span>
+          </div>`).join('')}</div>
+      </div>
+    </div>`
+}
+
+// 操作
+const addTag = (tagId) => {
+  if (Number.isNaN(tagId) || state.selected.includes(tagId)) return
+  state.selected.push(tagId)
+  $('tagInput').value = ''
+  renderSuggest()
+  renderSelected()
+  renderResult()
+}
+
+const addFromInput = () => {
+  const keyword = $('tagInput').value.trim()
+  if (!keyword) return
+  if (state.tagIndex.has(keyword)) return addTag(state.tagIndex.get(keyword))  //完全符合
+  const first = $('suggest').querySelector('[data-add]')  //否則取第一個建議
+  if (first) addTag(Number(first.dataset.add))
+}
+
+document.addEventListener('click', (event) => {
+  const add = event.target.closest('[data-add]')
+  const remove = event.target.closest('[data-remove]')
+  if (add) addTag(Number(add.dataset.add))
+  if (remove) {
+    state.selected = state.selected.filter((i) => i !== Number(remove.dataset.remove))
+    renderSelected()
+    renderSuggest()
+    renderResult()
+  }
+})
+$('tagInput').addEventListener('input', renderSuggest)
+$('tagInput').addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.isComposing) addFromInput() })
+$('addBtn').addEventListener('click', addFromInput)
+
+// 啟動
+const init = async () => {
+  $('status').innerHTML = `<div class="sl-progress"><div class="sl-progress-head"><span>載入資料中</span><span class="sl-progress-num">約 2MB</span></div><div class="sl-progress-track" role="progressbar" aria-valuenow="30" aria-valuemin="0" aria-valuemax="100" aria-label="載入進度"><div class="sl-progress-fill" style="width: 30%;"></div></div></div>`
+  try {
+    const [meta, stats, tags] = await Promise.all([fetchJson('meta.json'), fetchJson('stats.json'), fetchJson('tags.json')])
+    Object.assign(state, { meta, stats, tags })
+    tags.forEach(([name], i) => state.tagIndex.set(name, i))
+    $('status').innerHTML = ''
+    $('tagInput').disabled = false
+    $('addBtn').disabled = false
+    $('footer').textContent = `資料更新於 ${meta.built_at.replace('T', ' ').slice(0, 16)}（UTC）。新資料為發布約 7 天後記錄的數值；2024 年的舊資料記錄時間不一，僅供參考。`
+    renderOverview()
+  } catch (error) {
+    $('status').innerHTML = `<div class="sl-card"><span class="sl-badge sl-badge-danger">載入失敗</span> <span class="sl-text-body">${escapeHtml(error.message)}，請稍後重新整理。</span></div>`
+  }
+}
+init()
+</script>
+</body>
+</html>
