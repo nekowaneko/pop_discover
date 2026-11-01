@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="design/tokens.css">
 <link rel="stylesheet" href="design/components.css">
 <style>
+  .page h1, .page h2 { margin: 0; }
   .page { max-width: 880px; margin: 0 auto; padding: var(--space-6) var(--space-4) var(--space-8); box-sizing: border-box; }
   .section { margin-top: var(--space-6); }
   .muted { color: var(--ink-muted); }
@@ -34,7 +35,7 @@
 </head>
 <body>
 <main class="page">
-  <div class="sl-text-display">Pixiv 人氣探索</div>
+  <h1 class="sl-text-display">Pixiv 人氣探索</h1>
   <div class="sl-text-body muted">輸入 hashtag，看同標籤作品發布後的觀看、愛心、收藏數，預估你的作品大概會落在哪裡。</div>
 
   <section class="section stack" aria-label="查詢">
@@ -43,7 +44,7 @@
       <button id="addBtn" class="sl-btn sl-btn-primary" type="button" disabled>加入標籤</button>
     </div>
     <div id="suggest" class="suggest" aria-live="polite"></div>
-    <div id="selected" class="chips" aria-label="已選標籤"></div>
+    <div id="selected" class="chips" role="group" aria-label="已選標籤"></div>
   </section>
 
   <section id="status" class="section" aria-live="polite"></section>
@@ -202,7 +203,7 @@ const renderResult = async () => {
     const names = state.selected.map((i) => `「${escapeHtml(state.tags[i][0])}」`).join(' + ')
     if (rows.length === 0) {
       status.innerHTML = ''
-      result.innerHTML = `<div class="sl-card"><div class="sl-text-title">沒有同時符合 ${names} 的作品</div><div class="sl-text-body muted">試著移除一個標籤，或換成比較常見的寫法。</div></div>`
+      result.innerHTML = `<div class="sl-card"><h2 class="sl-text-title">沒有同時符合 ${names} 的作品</h2><div class="sl-text-body muted">試著移除一個標籤，或換成比較常見的寫法。</div></div>`
       return
     }
     const pick = (arr) => rows.map((r) => arr[r])
@@ -215,7 +216,7 @@ const renderResult = async () => {
       : `<span class="sl-badge sl-badge-success">樣本充足</span>`
     result.innerHTML = `
       <div class="stack">
-        <div><div class="sl-text-title">${names}</div><div class="sl-text-caption muted">共 ${fmt(rows.length)} 件作品 ${sampleBadge}</div></div>
+        <div><h2 class="sl-text-title">${names}</h2><div class="sl-text-caption muted">共 ${fmt(rows.length)} 件作品 ${sampleBadge}</div></div>
         <div class="sl-bento bento-3">${metricCard('觀看數', view, true)}${metricCard('愛心數', like)}${metricCard('收藏數', bookmark)}</div>
         <div class="sl-card stack"><div class="sl-text-label">觀看數分布</div><div class="dist">${distribution(views)}</div></div>
         <div class="sl-card stack"><div class="sl-text-label">常一起出現的標籤</div><div id="cotags" class="chips"><span class="sl-text-caption muted">計算中</span></div></div>
@@ -237,7 +238,7 @@ const renderOverview = () => {
   const m = state.meta
   $('overview').innerHTML = `
     <div class="stack">
-      <div class="sl-text-title">整體概況</div>
+      <h2 class="sl-text-title">整體概況</h2>
       <div class="sl-bento bento-4">
         <div class="sl-card sl-card-slate"><div class="sl-card-label">作品數</div><div class="sl-card-value">${fmt(m.count)}</div></div>
         <div class="sl-card"><div class="sl-card-label">標籤數</div><div class="sl-card-value">${fmt(m.tag_count)}</div></div>
