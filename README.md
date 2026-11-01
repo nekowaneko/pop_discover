@@ -37,7 +37,22 @@
 2. 學會用資料庫儲存資料，而不再是excel
 
 ## 使用說明
-打包整個專案，用CMD將位置移動至打包的位置，輸入python google2.py，即可探索搜尋結果。
+線上版：https://nekowaneko.github.io/pop_discover/（輸入 hashtag 即可查看同標籤作品的觀看、愛心、收藏數與分布）。
+
+### 2026-11 改版
+- 爬蟲改為 `crawl.py`，改抓 Pixiv 的 JSON 介面。每次執行會找出「7 天前」那 6 小時發布的作品，隨機抽樣 200 筆，讓每筆數據都約是發布滿 7 天的數值。
+- 資料庫改存在 `data` 分支（`web_info.db.gz`，只保留最新一版），不再每次 commit 進 main。main 裡的 `web_info.db` 是 2024 年的舊資料快照。
+- `build_index.py` 把資料庫轉成分片 JSON，網頁在瀏覽器端計算，不需要伺服器。
+- 排程：`.github/workflows/discover.yml`，每 6 小時執行一次。
+- 選用：在 repo Secrets 設定 `PIXIV_PHPSESSID`（實測未登入也抓得到 R-18 的數據，通常不需要）。
+- 舊版 `discover.ipynb`、`google2.py`（Gradio）保留作為紀錄，已不再使用。
+
+### 本機預覽
+```
+python build_index.py
+cp -r design site/design
+cd site && python -m http.server 8000
+```
 
 ## 中文版聲明
 本專案的初衷是以開源形式提供一個工具，幫助創作者在 Pixiv 平台上更容易讓自己的作品獲得關注和曝光。所有從 Pixiv 上收集的資料均遵循其公開的數據範圍和使用條款，且我們強調本專案並不涉及任何侵犯版權或違法的行為。
