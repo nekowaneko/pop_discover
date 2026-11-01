@@ -31,15 +31,27 @@ jobs:
       - name: 安裝套件
         run: pip install requests
 
-      #資料庫不再每次 commit 進 main（會讓 repo 越來越肥），改存在只保留最新一版的 data 分支
-      #data 分支還不存在時（第一次執行），沿用 main 裡的 web_info.db
+      #資料庫存在只保留最新一版的 data 分支（不 commit 進 main，避免 repo 越來越肥）
+      #data 分支存在卻取不下來時直接失敗，絕不改用舊資料，否則後面會覆蓋掉 data 分支的新資料
+      #只有 data 分支確定不存在（全新 repo）時，才用 legacy/ 裡 2024 年的舊資料庫當起點
       - name: 取得最新資料庫
+        id: getdb
         run: |
-          if git fetch --depth=1 origin data 2>/dev/null; then
+          set +e
+          git ls-remote --exit-code --heads origin data >/dev/null
+          status=$?  #0：分支存在；2：分支不存在；其他：網路或權限錯誤
+          set -e
+          if [ "$status" = "0" ]; then
+            git fetch --depth=1 origin data
             git show origin/data:web_info.db.gz | gunzip > web_info.db
+            test -s web_info.db
             echo "已從 data 分支取得資料庫"
+          elif [ "$status" = "2" ]; then
+            cp legacy/web_info.db web_info.db
+            echo "data 分支不存在，使用 legacy/web_info.db 當起點"
           else
-            echo "data 分支不存在，使用 main 的 web_info.db"
+            echo "無法確認 data 分支（狀態碼 $status），本次停止，不覆蓋任何資料"
+            exit 1
           fi
 
       - name: 爬取新作品
@@ -54,7 +66,7 @@ jobs:
 
       #爬蟲中途失敗時，已存進去的資料仍然有效，所以照樣保存；同時附上執行紀錄方便查問題
       - name: 資料庫與執行紀錄存到 data 分支
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.getdb.outcome == 'success' }}  #沒取得資料庫就不推，避免覆蓋
         run: |
           mkdir -p /tmp/data
           gzip -9 -c web_info.db > /tmp/data/web_info.db.gz
@@ -68,13 +80,13 @@ jobs:
 
       #爬蟲失敗時仍用既有資料重建網站，網站不會因此壞掉；這次執行仍會標成失敗，方便發現問題
       - name: 建立網站資料索引
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.getdb.outcome == 'success' }}
         run: |
           python build_index.py
           cp -r design site/design
 
       - name: 上傳網站
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.getdb.outcome == 'success' }}
         uses: actions/upload-pages-artifact@v5
         with:
           path: site

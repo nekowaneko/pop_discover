@@ -1,5 +1,7 @@
-#建置產物（由 Actions 產生，不進版控）
+#建置產物與執行時檔案（由 Actions 產生，不進版控）
 site/data/
 site/design/
+/web_info.db
+crawl.log
 __pycache__/
 *.mhtml

@@ -1,78 +1,140 @@
-# Pixiv人氣探索工具
+# Pixiv 人氣探索工具
+
+線上版：https://nekowaneko.github.io/pop_discover/
+
+輸入 hashtag，看同標籤作品發布後的觀看、愛心、收藏數，預估自己的作品大概會落在哪個區間。
+
 ## 想解決的問題
 1. 自己的作品在pixiv上可以有多高的人氣？需要滿足哪些條件？
 
 2. 依照我想要的標籤，最多可以有多少觀看數？作品製作方向為何？
-## 基本想法
-1. 輸入圖片 --> 轉換成向量 --> 搜索前五十張類似的圖片向量 --> 調出這些向量的相關資料 --> 進行統計，篩出結果 --> 輸出統計的觀看數(含標準差)、十大標籤、主題命名與描述。 (暫不執行)
 
-2. 輸入標籤 --> 搜索相同或相似標籤的作品 --> 依觀看數排名 -->  輸出統計的觀看數(含標準差)與前十大人氣的作品。
-## 流程
-1. 爬資料  (ing)
+## 功能
 
-   下載response.text，再從裡面抓數據。設定每6小時收集200筆，每收集一筆，間隔10-15秒。
+- **整體概況**：作品數、標籤數、整體觀看數中位數，以及最常見的 20 個標籤與各自的觀看數中位數。
+- **標籤查詢**：輸入時會自動完成，可以同時選多個標籤（作品必須全部都有）。
+- **預估數值**：觀看、愛心、收藏數的中位數、平均 ± 標準差，以及「中間一半」的範圍（第 25～75 百分位數）。
+- **觀看數分布**：同標籤作品落在各個觀看數區間的比例。
+- **常一起出現的標籤**：點一下就加入查詢，用來找作品方向。
+- 樣本少於 30 件時會提醒「僅供參考」。
 
-3. 將資料以SQLite統計並儲存  (ing)
+> 觀看數分布很偏斜，少數爆紅作品會把平均拉高，標準差常常比平均還大。判斷時建議以中位數和「中間一半」為主。
 
-   儲存的資料包含work_ID、title、like、view、book mark、image url
+## 運作方式
 
-4. 依照基本想法設計檢索邏輯  (O)
-
-   輸入tag，從資料庫中搜尋有包含tag的tags，並依照其view排序，取前五十多觀看數的作品調出，同時計算前十多的tag，最後輸出10個tag、like、view、book mark的平均與標準差
-
-6. 以jupyter notebook實作輸出  (O)
-
-7. 以gradio進行圖形介面  (Ｏ)
-
-8. 以git action達到自動化更新  (O)
-
-## 擴展與優化
-1. 輸入自己tag、like、view、bookmark數後，給予你在同tags族群中的排名。
-
-2. 關掉視窗後，程式自動停止運行。
-
-## 從中學到的東西
-1. 不要太急著要資料，要注意短時間多次訪問可能會被鎖。
-
-2. 學會用資料庫儲存資料，而不再是excel
-
-## 使用說明
-線上版：https://nekowaneko.github.io/pop_discover/（輸入 hashtag 即可查看同標籤作品的觀看、愛心、收藏數與分布）。
-
-### 2026-11 改版
-- 爬蟲改為 `crawl.py`，改抓 Pixiv 的 JSON 介面。每次執行會找出「7 天前」那 6 小時發布的作品，隨機抽樣 200 筆，讓每筆數據都約是發布滿 7 天的數值。
-- 資料庫改存在 `data` 分支（`web_info.db.gz`，只保留最新一版），不再每次 commit 進 main。main 裡的 `web_info.db` 是 2024 年的舊資料快照。
-- `build_index.py` 把資料庫轉成分片 JSON，網頁在瀏覽器端計算，不需要伺服器。
-- 排程：`.github/workflows/discover.yml`，每 6 小時執行一次。
-- 選用：在 repo Secrets 設定 `PIXIV_PHPSESSID`（實測未登入也抓得到 R-18 的數據，通常不需要）。
-- 舊版 `discover.ipynb`、`google2.py`（Gradio）保留作為紀錄，已不再使用。
-
-### 本機預覽
 ```
+GitHub Actions（每 6 小時）
+  ├─ 1. 從 data 分支取出最新資料庫
+  ├─ 2. crawl.py：抽樣「發布滿 7 天」的作品，存進 SQLite
+  ├─ 3. 資料庫推回 data 分支（只保留最新一版）
+  ├─ 4. build_index.py：資料庫 → 分片 JSON（site/data/）
+  └─ 5. 部署 site/ 到 GitHub Pages
+瀏覽器
+  └─ 讀取分片 JSON，在本機計算統計，不需要伺服器
+```
+
+### 爬蟲（`crawl.py`）
+
+1. 算出「7 天前」那 6 小時的時間窗。
+2. 用 Pixiv 的 JSON 介面（`/ajax/illust/{id}`）探測作品的發布時間，以倍增加二分搜尋找出時間窗對應的作品 ID 範圍。
+3. 在範圍內隨機抽樣，存滿 200 筆為止。
+
+每筆資料都是發布約 7 天時的數值，彼此可以比較，也能持續反映最新趨勢。
+
+### 資料庫存放
+
+- 最新資料庫存在 `data` 分支的 `web_info.db.gz`，每次執行都強制覆蓋，只保留一版，main 不會因此越來越肥。
+- 同一個分支附上最近一次的執行紀錄 `crawl.log`，可以看存了幾筆、失敗原因。
+- 無法確認 `data` 分支時，該次執行直接失敗，不會拿舊資料覆蓋新資料。
+
+### 網站資料索引（`build_index.py`）
+
+| 檔案 | 內容 |
+|---|---|
+| `meta.json` | 資料筆數、更新時間、概況 |
+| `stats.json` | 每件作品的喜歡、收藏、觀看數 |
+| `tags.json` | 所有標籤與出現次數，依次數排序，陣列位置就是標籤編號 |
+| `post/{n}.json` | 標籤 → 含此標籤的作品（差分編碼），256 個分片 |
+| `rows/{n}.json` | 每件作品的標籤，每 5,000 件一檔 |
+
+網頁首次載入約 2MB（壓縮後），查詢一個標籤只需要再抓一個分片。
+
+## 資料說明
+
+| 欄位 | 說明 |
+|---|---|
+| `work_ID` | 作品 ID |
+| `title` | 標題 |
+| `tags` | 標籤，以 `, ` 分隔 |
+| `like_count` / `bookmark_count` / `view_count` | 愛心、收藏、觀看數（記錄當下的數值） |
+| `image_url` | 圖片網址（R-18 作品在未登入時為空） |
+| `create_date` | 發布時間（2026-11 起的新資料才有） |
+
+- **2024 年的舊資料**（約 17.8 萬筆，作品 ID 121188700～121416180）沒有發布時間，記錄時作品已發布多久也不一致，數值僅供參考。
+- **2026-11 起的新資料**都是發布約 7 天時記錄的。
+- 包含 R-18 作品（未登入也能取得數值）。
+
+## 專案結構
+
+```
+crawl.py                     爬蟲
+build_index.py               資料庫 → 網站用 JSON
+site/index.html              網頁（純前端）
+design/                      暖石板琥珀設計系統（tokens.css、components.css）
+.github/workflows/discover.yml  排程：爬取、存檔、部署
+legacy/                      2024 年舊版（notebook、Gradio 介面、舊資料庫快照），已不再使用
+```
+
+## 本機執行
+
+需要 Python 3.10 以上與 `requests`。
+
+```
+#取得最新資料庫
+git fetch origin data
+git show origin/data:web_info.db.gz | gunzip > web_info.db
+
+#爬一次（選用，會實際連線 Pixiv）
+pip install requests
+python crawl.py
+
+#預覽網站
 python build_index.py
 cp -r design site/design
-cd site && python -m http.server 8000
+cd site
+python -m http.server 8000
 ```
 
-## 中文版聲明
-本專案的初衷是以開源形式提供一個工具，幫助創作者在 Pixiv 平台上更容易讓自己的作品獲得關注和曝光。所有從 Pixiv 上收集的資料均遵循其公開的數據範圍和使用條款，且我們強調本專案並不涉及任何侵犯版權或違法的行為。
+然後打開 http://localhost:8000 。
 
-本專案的數據收集行為僅限於技術研究和協助創作者分析其作品的表現，並無商業用途，也不會對第三方資料造成侵犯。本專案的開源目的是為了促進創作者社群的良性發展，而不是非法利用數據或違反平台規則。
+## 調整設定
 
-我們聲明：
+都在 `crawl.py` 開頭的常數：
 
-1. 所有收集的數據來自於公開資訊，並遵守 Pixiv 的使用政策。
-2. 本專案不會使用這些數據進行任何形式的違法或不當操作，也不會用於商業化用途。
-3. 若有任何版權或相關問題，請聯繫我們，我們會立即處理。
+| 常數 | 預設 | 說明 |
+|---|---|---|
+| `LAG_DAYS` | 7 | 抓發布滿幾天的作品；設 0 就是抓最新作品 |
+| `WINDOW_HOURS` | 6 | 抽樣時間窗，與排程間隔相同 |
+| `SAVE_TARGET` | 200 | 每次存幾筆，也可以用環境變數覆寫 |
+| `DELAY_RANGE` | 3～6 秒 | 每次請求之間的隨機等待 |
 
-## 英文版聲明
-This project is open source with the intention of providing a tool that helps creators gain more attention and exposure for their works on Pixiv. All data collected from Pixiv is within the publicly available scope and complies with the platform's terms of use. We emphasize that this project does not engage in any illegal activities or copyright infringement.
+排程時間在 `.github/workflows/discover.yml` 的 `cron`。
 
-The data collected by this project is strictly for technical research and assisting creators in analyzing the performance of their works. It has no commercial intent, nor does it infringe upon third-party data. The goal of this open-source project is to foster a positive and supportive community for creators, not to misuse data or violate platform rules.
+## 對 Pixiv 的請求頻率
 
-We declare:
+- 一次只送一個請求，不平行抓取。
+- 探測階段每次等 1 秒（約 30～40 個請求），抓取階段每次隨機等 3～6 秒（約 280 個請求）。
+- 收到 403 或 429 時立即停止整次執行，不重試。
+- 排程同時只跑一個，不會重疊。
 
-1. All data collected is from publicly available information and adheres to Pixiv's terms of service.
-2. This project will not use the data for any illegal or improper activities, nor for commercial purposes.
-3. If any copyright or related concerns arise, please contact us, and we will address the issue immediately.
+整體約每 4～5 秒一個請求，一天約 1,300 個。
 
+## 版本紀錄
+
+- **2024**：Jupyter notebook 解析作品網頁 HTML，Gradio 本機介面。
+- **2024-08 起**：Pixiv 網頁改版後解析失敗，錯誤被 `except: pass` 吞掉，資料庫停止成長，但排程每次仍跑 3 小時多並顯示成功。
+- **2026-11**：改用 JSON 介面重寫爬蟲，改為抽樣發布滿 7 天的作品，資料庫移到 `data` 分支，介面改成 GitHub Pages 靜態網站。舊檔移到 `legacy/`。
+
+## 聲明
+
+本專案只收集作品頁面上公開顯示的數值（觀看、愛心、收藏數與標籤），用於個人研究與協助創作者了解標籤的熱門程度，不用於商業用途，也不轉載作品圖片。請求頻率已刻意放慢，避免對 Pixiv 造成負擔。若有任何疑慮，請開 issue 聯繫，會儘速處理。
