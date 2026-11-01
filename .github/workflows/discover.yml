@@ -21,10 +21,10 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: 取出程式碼
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 安裝 Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -75,7 +75,7 @@ jobs:
 
       - name: 上傳網站
         if: ${{ !cancelled() }}
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
@@ -89,4 +89,4 @@ jobs:
     steps:
       - name: 部署到 GitHub Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
