@@ -3,7 +3,7 @@ name: discover
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  #每 6 小時執行一次（UTC）
+    - cron: '17 */6 * * *'  #每 6 小時的第 17 分執行（UTC），避開整點尖峰，台灣時間 2:17、8:17、14:17、20:17
   workflow_dispatch:  #可以在 Actions 頁面手動執行
 
 permissions:

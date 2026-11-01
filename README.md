@@ -118,7 +118,7 @@ python -m http.server 8000
 | `SAVE_TARGET` | 200 | 每次存幾筆，也可以用環境變數覆寫 |
 | `DELAY_RANGE` | 3～6 秒 | 每次請求之間的隨機等待 |
 
-排程時間在 `.github/workflows/discover.yml` 的 `cron`。
+排程時間在 `.github/workflows/discover.yml` 的 `cron`，目前是每 6 小時的第 17 分（避開整點，GitHub 在整點尖峰時常延後或略過排程）。
 
 ## 對 Pixiv 的請求頻率
 
