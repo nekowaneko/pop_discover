@@ -1,4 +1,4 @@
-#Pixiv 作品資料爬蟲（取代 discover.ipynb）
+#Pixiv 作品資料爬蟲（取代 legacy/discover.ipynb）
 #做法：每次執行時，找出「LAG_DAYS 天前」那 WINDOW_HOURS 小時內發布的作品 ID 範圍，
 #      在範圍內隨機抽樣，用 Pixiv 的 JSON 介面抓數據寫進 SQLite。
 #這樣每筆資料記錄時都約發布滿 LAG_DAYS 天，觀看數比較有可比性，也能持續反映最新趨勢。
